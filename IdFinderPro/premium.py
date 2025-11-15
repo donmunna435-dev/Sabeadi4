@@ -3,6 +3,7 @@ import random
 import string
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, LabeledPrice, PreCheckoutQuery
+from pyrogram.errors import ContinuePropagation
 from database.db import db
 from config import ADMINS
 
@@ -32,7 +33,7 @@ async def handle_quantity_input(client: Client, message: Message):
     """Handle quantity input for code generation"""
     # Check if admin has pending generation state
     if message.from_user.id not in generation_state:
-        return  # Not in generation flow, ignore
+        raise ContinuePropagation  # Allow other handlers to process this message
 
     # Get the quantity
     try:
