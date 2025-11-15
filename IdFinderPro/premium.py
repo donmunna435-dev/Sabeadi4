@@ -3,7 +3,6 @@ import random
 import string
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, LabeledPrice, PreCheckoutQuery
-from pyrogram.errors import ContinuePropagation
 from database.db import db
 from config import ADMINS
 
@@ -12,6 +11,12 @@ redeem_codes = {}
 
 # Store generation state for admins
 generation_state = {}
+
+# Custom filter to check if admin is in generation state
+def in_generation_state(_, __, message):
+    return message.from_user.id in generation_state
+
+generation_filter = filters.create(in_generation_state)
 
 # Generate redeem code
 @Client.on_message(filters.private & filters.command(["generate"]) & filters.user(ADMINS))
@@ -28,13 +33,9 @@ async def generate_redeem_code(client: Client, message: Message):
     )
 
 # Handle quantity input from admin
-@Client.on_message(filters.private & filters.text & filters.user(ADMINS))
+@Client.on_message(filters.private & filters.text & filters.user(ADMINS) & generation_filter)
 async def handle_quantity_input(client: Client, message: Message):
     """Handle quantity input for code generation"""
-    # Check if admin has pending generation state
-    if message.from_user.id not in generation_state:
-        raise ContinuePropagation  # Allow other handlers to process this message
-
     # Get the quantity
     try:
         quantity = int(message.text.strip())
