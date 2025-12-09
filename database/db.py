@@ -9,6 +9,7 @@ class Database:
         self.col = self.db.users
 
     def new_user(self, id, name):
+        import time
         return dict(
             id = id,
             name = name,
@@ -16,7 +17,8 @@ class Database:
             is_premium = False,
             premium_expiry = None,
             downloads_today = 0,
-            last_download_date = None
+            last_download_date = None,
+            joined_at = time.time()
         )
     
     async def add_user(self, id, name):
@@ -33,6 +35,21 @@ class Database:
 
     async def get_all_users(self):
         return self.col.find({})
+    
+    async def get_all_users_data(self):
+        """Get all users with full details for export"""
+        users_data = []
+        cursor = self.col.find({})
+        async for user in cursor:
+            users_data.append({
+                'user_id': user.get('id'),
+                'name': user.get('name'),
+                'is_premium': user.get('is_premium', False),
+                'joined_at': user.get('joined_at'),
+                'downloads_today': user.get('downloads_today', 0),
+                'last_download_date': user.get('last_download_date')
+            })
+        return users_data
 
     async def delete_user(self, user_id):
         await self.col.delete_many({'id': int(user_id)})
@@ -80,13 +97,18 @@ class Database:
         return premium_users
     
     # Download tracking for rate limiting
-    async def check_and_update_downloads(self, user_id):
-        """Check and update download count for rate limiting"""
-        from datetime import datetime, date
+    async def check_download_limit(self, user_id, count=1):
+        """Check if user can download 'count' files without exceeding limit"""
+        from datetime import date
         
         user = await self.col.find_one({'id': int(user_id)})
         if not user:
             return False
+        
+        # Premium users have unlimited downloads
+        is_premium_user = await self.is_premium(user_id)
+        if is_premium_user:
+            return True
         
         today = str(date.today())
         last_date = user.get('last_download_date')
@@ -96,19 +118,36 @@ class Database:
         if last_date != today:
             downloads_today = 0
         
-        # Check limits
-        is_premium_user = await self.is_premium(user_id)
-        limit = 1000 if is_premium_user else 10  # Premium: 1000/day, Free: 10/day
+        # Check if user has enough limit left for 'count' downloads
+        limit = 10  # Free users: 10/day
+        return (downloads_today + count) <= limit
+    
+    async def increment_download_count(self, user_id):
+        """Increment download count after successful download (only for non-premium)"""
+        from datetime import date
         
-        if downloads_today >= limit:
-            return False  # Limit exceeded
+        # Premium users don't have download limits
+        is_premium_user = await self.is_premium(user_id)
+        if is_premium_user:
+            return
+        
+        user = await self.col.find_one({'id': int(user_id)})
+        if not user:
+            return
+        
+        today = str(date.today())
+        last_date = user.get('last_download_date')
+        downloads_today = user.get('downloads_today', 0)
+        
+        # Reset if new day
+        if last_date != today:
+            downloads_today = 0
         
         # Update count
         await self.col.update_one(
             {'id': int(user_id)},
             {'$set': {'downloads_today': downloads_today + 1, 'last_download_date': today}}
         )
-        return True
     
     async def get_download_count(self, user_id):
         """Get today's download count"""

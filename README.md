@@ -15,8 +15,8 @@ A professional Telegram bot for downloading restricted content from private chan
 - Auto-join private channels via invite links
 
 ### 💎 **Premium Membership**
-- **Free Plan:** 10 downloads/day
-- **Premium Plan:** 100 downloads/day
+- **Free Plan:** 10 successful downloads/day
+- **Premium Plan:** Unlimited downloads (no daily limit)
 - Redeem code system
 - Contact admin for premium access
 
@@ -71,6 +71,8 @@ A professional Telegram bot for downloading restricted content from private chan
 - `/admin` - Admin panel
 - `/generate` - Generate redeem codes
 - `/premiumlist` - Manage premium users
+- `/processes` - View active downloads
+- `/exportdata` - Export user database (CSV)
 
 ---
 
@@ -131,6 +133,7 @@ CHANNEL_ID=-1002441460670
 ### config.py:
 - `FORCE_SUB_CHANNEL` - Channel username for force subscription
 - `FORCE_SUB_CHANNEL_ID` - Channel ID
+- `LOG_CHANNEL_ID` - Channel ID for logging downloads (set to 0 to disable)
 - `ADMINS` - Admin user ID
 
 ---
@@ -213,6 +216,8 @@ python bot.py
 - Force subscription
 - Auto file cleanup
 - Batch download support
+- Log channel for monitoring downloads
+- Process tracking for active downloads
 
 ---
 
@@ -237,9 +242,15 @@ For production, use process managers like PM2 or systemd.
 | Plan | Downloads/Day |
 |------|---------------|
 | Free | 10 |
-| Premium | 100 |
+| Premium | Unlimited |
 
-**Resets:** Daily at midnight  
+**Important:**
+- Only **successful downloads** are counted towards your limit
+- Failed downloads do not consume your quota
+- For range downloads (e.g., 100-110), the bot checks if you have enough limit before processing
+- Premium users enjoy unlimited downloads with no daily restrictions
+
+**Resets:** Daily at midnight (UTC)  
 **Tracking:** Per user basis
 
 ---
@@ -322,7 +333,18 @@ python bot.py
 
 ## 🆕 Recent Updates
 
-### Version 2.0 (Latest)
+### Version 2.1 (Latest)
+- ✅ Fixed download tracking - now counts only successful downloads
+- ✅ Premium users now have unlimited downloads (not 1000/day)
+- ✅ Range download limit checking - validates before processing
+- ✅ Improved user prompts when limits are exceeded
+- ✅ Better upgrade to premium messaging
+- ✅ Added `/processes` command for admins
+- ✅ Added `/exportdata` command to export user database
+- ✅ Log channel feature - forwards all downloads to monitoring channel
+- ✅ Process tracking with elapsed time display
+
+### Version 2.0
 - ✅ Complete rebranding
 - ✅ Premium membership system
 - ✅ Force subscription

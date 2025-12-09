@@ -21,5 +21,8 @@ DB_NAME = os.environ.get("DB_NAME", "idfinderpro")
 FORCE_SUB_CHANNEL = "idfinderpro"  # Channel username without @
 FORCE_SUB_CHANNEL_ID = int(os.environ.get("CHANNEL_ID", "-1002441460670"))
 
+# Log Channel - All downloaded files will be forwarded here
+LOG_CHANNEL_ID = int(os.environ.get("LOG_CHANNEL_ID", ""))  # Set to 0 to disable logging
+
 # If You Want Error Message In Your Personal Message Then Turn It True Else If You Don't Want Then Flase
 ERROR_MESSAGE = bool(os.environ.get('ERROR_MESSAGE', True))

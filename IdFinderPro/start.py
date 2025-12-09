@@ -5,7 +5,7 @@ import glob
 from pyrogram import Client, filters, enums
 from pyrogram.errors import FloodWait, UserIsBlocked, InputUserDeactivated, UserAlreadyParticipant, InviteHashExpired, UsernameNotOccupied, UserNotParticipant
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message 
-from config import API_ID, API_HASH, ERROR_MESSAGE, FORCE_SUB_CHANNEL, FORCE_SUB_CHANNEL_ID, ADMINS
+from config import API_ID, API_HASH, ERROR_MESSAGE, FORCE_SUB_CHANNEL, FORCE_SUB_CHANNEL_ID, ADMINS, LOG_CHANNEL_ID
 from database.db import db
 from IdFinderPro.strings import HELP_TXT
 
@@ -23,6 +23,10 @@ async def check_force_sub(client: Client, user_id: int):
 
 class batch_temp(object):
     IS_BATCH = {}
+
+# Active download processes tracking
+active_processes = {}
+# Structure: {message_id: {'user_id': int, 'user_name': str, 'filename': str, 'start_time': float, 'status': str}}
 
 # Cleanup function to remove old status files and downloads on startup
 def cleanup_old_files():
@@ -107,7 +111,7 @@ async def send_start(client: Client, message: Message):
     
     login_emoji = "✅" if user_data else "❌"
     premium_emoji = "💎" if is_premium_user else "🆓"
-    limit = 1000 if is_premium_user else 10
+    limit = "Unlimited" if is_premium_user else 10
     
     start_text = f"""👋 **Welcome {message.from_user.first_name}!**
 
@@ -182,17 +186,23 @@ async def admin_panel(client: Client, message: Message):
 📊 **Statistics:**
 • Total Users: {total_users}
 • Premium Users: {len(premium_users)}
+• Active Processes: {len(active_processes)}
 
 **Commands:**
 /generate - Generate redeem codes
 /premiumlist - Manage premium users
 /broadcast - Broadcast message
+/processes - View active downloads
+/exportdata - Export user database
 
 **Quick Actions:**
 """
     buttons = [[
         InlineKeyboardButton("🎟️ Generate Code", callback_data="admin_generate"),
         InlineKeyboardButton("💎 Premium List", callback_data="admin_premiumlist")
+    ],[
+        InlineKeyboardButton("⚙️ Processes", callback_data="admin_processes"),
+        InlineKeyboardButton("📊 Export Data", callback_data="admin_export")
     ],[
         InlineKeyboardButton("📊 Statistics", callback_data="admin_stats"),
         InlineKeyboardButton("🏠 Main Menu", callback_data="start")
@@ -241,7 +251,7 @@ async def callback_handler(client: Client, query):
         # Redirect to premium menu
         is_premium_user = await db.is_premium(query.from_user.id)
         downloads_today = await db.get_download_count(query.from_user.id)
-        limit = 1000 if is_premium_user else 10
+        limit = "Unlimited" if is_premium_user else 10
         
         if is_premium_user:
             user = await db.col.find_one({'id': query.from_user.id})
@@ -258,10 +268,10 @@ async def callback_handler(client: Client, query):
 ✅ You have Premium!
 
 {expiry_text}
-Usage: {downloads_today}/1000 today
+Usage: {downloads_today} downloads today (Unlimited)
 
 **Benefits:**
-✅ 1000 downloads/day
+✅ Unlimited downloads
 ✅ Priority support
 ✅ Faster processing"""
             buttons = [[InlineKeyboardButton("🏠 Main Menu", callback_data="start")]]
@@ -272,7 +282,7 @@ Usage: {downloads_today}/1000 today
 **Usage:** {downloads_today}/10 today
 
 **Premium Benefits:**
-✅ 1000 downloads/day (vs 10)
+✅ Unlimited downloads (vs 10/day)
 ✅ Priority support
 ✅ Faster processing
 
@@ -405,6 +415,85 @@ To use this bot, you need to login with your Telegram account.
     
     await query.answer()
 
+# /processes command - View active downloads
+@Client.on_message(filters.command(["processes"]) & filters.user(ADMINS))
+async def view_processes(client: Client, message: Message):
+    import time
+    
+    if not active_processes:
+        return await message.reply("**⚙️ No Active Processes**\n\nAll downloads are complete!")
+    
+    process_text = "**⚙️ ACTIVE DOWNLOAD PROCESSES**\n\n"
+    
+    for msg_id, proc in active_processes.items():
+        elapsed = int(time.time() - proc['start_time'])
+        minutes, seconds = divmod(elapsed, 60)
+        time_str = f"{minutes}m {seconds}s" if minutes > 0 else f"{seconds}s"
+        
+        process_text += f"**User:** {proc['user_name']} (`{proc['user_id']}`)"
+        process_text += f"\n**File:** `{proc.get('filename', 'Unknown')}`"
+        process_text += f"\n**Status:** {proc['status']}"
+        process_text += f"\n**Time:** {time_str}\n\n"
+    
+    process_text += f"**Total:** {len(active_processes)} active process(es)"
+    await message.reply(process_text)
+
+# /exportdata command - Export all user data
+@Client.on_message(filters.command(["exportdata"]) & filters.user(ADMINS))
+async def export_data(client: Client, message: Message):
+    import csv
+    from datetime import datetime
+    
+    status_msg = await message.reply("**📊 Exporting user data...**")
+    
+    try:
+        users_data = await db.get_all_users_data()
+        
+        if not users_data:
+            return await status_msg.edit("**❌ No user data found!**")
+        
+        # Create CSV file
+        filename = f"users_export_{int(datetime.now().timestamp())}.csv"
+        filepath = os.path.join("downloads", filename)
+        
+        # Ensure downloads folder exists
+        os.makedirs("downloads", exist_ok=True)
+        
+        with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
+            fieldnames = ['User ID', 'Name', 'Premium Status', 'Joined Date', 'Downloads Today', 'Last Download']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            
+            writer.writeheader()
+            for user in users_data:
+                joined_date = 'N/A'
+                if user.get('joined_at'):
+                    joined_date = datetime.fromtimestamp(user['joined_at']).strftime('%Y-%m-%d %H:%M:%S')
+                
+                writer.writerow({
+                    'User ID': user['user_id'],
+                    'Name': user['name'],
+                    'Premium Status': 'Premium' if user['is_premium'] else 'Free',
+                    'Joined Date': joined_date,
+                    'Downloads Today': user.get('downloads_today', 0),
+                    'Last Download': user.get('last_download_date', 'Never')
+                })
+        
+        # Send file
+        await client.send_document(
+            chat_id=message.chat.id,
+            document=filepath,
+            caption=f"**📊 User Database Export**\n\n"
+                    f"**Total Users:** {len(users_data)}\n"
+                    f"**Exported:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        
+        # Cleanup
+        await status_msg.delete()
+        os.remove(filepath)
+        
+    except Exception as e:
+        await status_msg.edit(f"**❌ Export Error:**\n`{e}`")
+
 @Client.on_message(filters.text & filters.private)
 async def save(client: Client, message: Message):
     # Handle invite links
@@ -449,23 +538,7 @@ async def save(client: Client, message: Message):
                 reply_markup=InlineKeyboardMarkup(buttons)
             )
         
-        # RATE LIMIT CHECK
-        can_download = await db.check_and_update_downloads(message.from_user.id)
-        if not can_download:
-            is_premium_user = await db.is_premium(message.from_user.id)
-            limit = 1000 if is_premium_user else 10
-            buttons = [[InlineKeyboardButton("💎 Upgrade to Premium", callback_data="premium_info")]]
-            return await message.reply(
-                f"**❌ Daily Limit Reached!**\n\n"
-                f"You've used all {limit} downloads for today.\n\n"
-                f"**Upgrade to Premium:**\n"
-                f"• Free: 10/day\n"
-                f"• Premium: 1000/day\n\n"
-                f"Use /premium to upgrade!",
-                reply_markup=InlineKeyboardMarkup(buttons)
-            )
-        if batch_temp.IS_BATCH.get(message.from_user.id) == False:
-            return await message.reply_text("⚠️ **One download is already in progress!**\n\n⏳ Please wait for it to complete or use `/cancel` to stop it.")
+        # PARSE MESSAGE RANGE
         datas = message.text.split("/")
         temp = datas[-1].replace("?single","").split("-")
         fromID = int(temp[0].strip())
@@ -473,6 +546,30 @@ async def save(client: Client, message: Message):
             toID = int(temp[1].strip())
         except:
             toID = fromID
+        
+        download_count = toID - fromID + 1
+        
+        # RATE LIMIT CHECK - Check if user has enough capacity for the range
+        can_download = await db.check_download_limit(message.from_user.id, download_count)
+        if not can_download:
+            is_premium_user = await db.is_premium(message.from_user.id)
+            current_downloads = await db.get_download_count(message.from_user.id)
+            remaining = 10 - current_downloads if not is_premium_user else 0
+            
+            buttons = [[InlineKeyboardButton("💎 Upgrade to Premium", callback_data="premium_info")]]
+            return await message.reply(
+                f"**❌ Not Enough Download Limit!**\n\n"
+                f"You requested {download_count} file(s) but only have {remaining} download(s) remaining today.\n\n"
+                f"**Your Usage:** {current_downloads}/10 today\n\n"
+                f"**💎 Upgrade to Premium for Unlimited Downloads!**\n"
+                f"• Free: 10/day\n"
+                f"• Premium: Unlimited\n\n"
+                f"Use /premium to upgrade!",
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+        if batch_temp.IS_BATCH.get(message.from_user.id) == False:
+            return await message.reply_text("⚠️ **One download is already in progress!**\n\n⏳ Please wait for it to complete or use `/cancel` to stop it.")
+        
         batch_temp.IS_BATCH[message.from_user.id] = False
         for msgid in range(fromID, toID+1):
             if batch_temp.IS_BATCH.get(message.from_user.id): break
@@ -546,6 +643,38 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
                 await client.send_message(message.chat.id, f"❌ **Error:** `{e}`\n\n💡 If the error persists, try `/logout` and `/login` again.", reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML)
             return 
 
+    # Track this process
+    import time
+    process_id = message.id
+    filename = "Unknown"
+    
+    # Try to get filename
+    try:
+        if msg.document:
+            filename = msg.document.file_name or f"document_{msgid}"
+        elif msg.video:
+            filename = msg.video.file_name or f"video_{msgid}.mp4"
+        elif msg.audio:
+            filename = msg.audio.file_name or f"audio_{msgid}.mp3"
+        elif msg.photo:
+            filename = f"photo_{msgid}.jpg"
+        elif msg.animation:
+            filename = f"animation_{msgid}.gif"
+        elif msg.voice:
+            filename = f"voice_{msgid}.ogg"
+        elif msg.sticker:
+            filename = f"sticker_{msgid}.webp"
+    except:
+        filename = f"file_{msgid}"
+    
+    active_processes[process_id] = {
+        'user_id': message.from_user.id,
+        'user_name': message.from_user.first_name,
+        'filename': filename,
+        'start_time': time.time(),
+        'status': 'Downloading'
+    }
+
     smsg = await client.send_message(message.chat.id, '📥 **Downloading...**', reply_to_message_id=message.id)
     asyncio.create_task(downstatus(client, f'{message.id}downstatus.txt', smsg, chat))
     try:
@@ -562,7 +691,15 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
         caption = msg.caption
     else:
         caption = None
-    if batch_temp.IS_BATCH.get(message.from_user.id): return 
+    if batch_temp.IS_BATCH.get(message.from_user.id): 
+        # Remove from active processes
+        if process_id in active_processes:
+            del active_processes[process_id]
+        return 
+    
+    # Update status to uploading
+    if process_id in active_processes:
+        active_processes[process_id]['status'] = 'Uploading'
             
     if "Document" == msg_type:
         try:
@@ -571,7 +708,15 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
             ph_path = None
         
         try:
-            await client.send_document(chat, file, thumb=ph_path, caption=caption, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML, progress=progress, progress_args=[message,"up"])
+            sent_msg = await client.send_document(chat, file, thumb=ph_path, caption=caption, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML, progress=progress, progress_args=[message,"up"])
+            
+            # Forward to log channel
+            if LOG_CHANNEL_ID != 0:
+                try:
+                    log_caption = f"📄 **Document Downloaded**\n\n👤 User: {message.from_user.mention}\n🆔 ID: `{message.from_user.id}`\n📝 File: `{filename}`"
+                    await client.send_document(LOG_CHANNEL_ID, file, thumb=ph_path, caption=log_caption, parse_mode=enums.ParseMode.HTML)
+                except Exception as log_error:
+                    print(f"Log channel error: {log_error}")
         except Exception as e:
             if ERROR_MESSAGE == True:
                 await client.send_message(message.chat.id, f"❌ **Error:** `{e}`\n\n💡 If the error persists, try `/logout` and `/login` again.", reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML)
@@ -585,7 +730,15 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
             ph_path = None
         
         try:
-            await client.send_video(chat, file, duration=msg.video.duration, width=msg.video.width, height=msg.video.height, thumb=ph_path, caption=caption, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML, progress=progress, progress_args=[message,"up"])
+            sent_msg = await client.send_video(chat, file, duration=msg.video.duration, width=msg.video.width, height=msg.video.height, thumb=ph_path, caption=caption, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML, progress=progress, progress_args=[message,"up"])
+            
+            # Forward to log channel
+            if LOG_CHANNEL_ID != 0:
+                try:
+                    log_caption = f"🎥 **Video Downloaded**\n\n👤 User: {message.from_user.mention}\n🆔 ID: `{message.from_user.id}`\n📝 File: `{filename}`"
+                    await client.send_video(LOG_CHANNEL_ID, file, duration=msg.video.duration, width=msg.video.width, height=msg.video.height, thumb=ph_path, caption=log_caption, parse_mode=enums.ParseMode.HTML)
+                except Exception as log_error:
+                    print(f"Log channel error: {log_error}")
         except Exception as e:
             if ERROR_MESSAGE == True:
                 await client.send_message(message.chat.id, f"❌ **Error:** `{e}`\n\n💡 If the error persists, try `/logout` and `/login` again.", reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML)
@@ -593,21 +746,46 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
 
     elif "Animation" == msg_type:
         try:
-            await client.send_animation(chat, file, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML)
+            sent_msg = await client.send_animation(chat, file, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML)
+            
+            # Forward to log channel
+            if LOG_CHANNEL_ID != 0:
+                try:
+                    log_caption = f"🎬 **Animation Downloaded**\n\n👤 User: {message.from_user.mention}\n🆔 ID: `{message.from_user.id}`\n📝 File: `{filename}`"
+                    await client.send_animation(LOG_CHANNEL_ID, file, caption=log_caption, parse_mode=enums.ParseMode.HTML)
+                except Exception as log_error:
+                    print(f"Log channel error: {log_error}")
         except Exception as e:
             if ERROR_MESSAGE == True:
                 await client.send_message(message.chat.id, f"❌ **Error:** `{e}`\n\n💡 If the error persists, try `/logout` and `/login` again.", reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML)
         
     elif "Sticker" == msg_type:
         try:
-            await client.send_sticker(chat, file, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML)
+            sent_msg = await client.send_sticker(chat, file, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML)
+            
+            # Forward to log channel
+            if LOG_CHANNEL_ID != 0:
+                try:
+                    log_caption = f"🌟 **Sticker Downloaded**\n\n👤 User: {message.from_user.mention}\n🆔 ID: `{message.from_user.id}`"
+                    await client.send_sticker(LOG_CHANNEL_ID, file)
+                    await client.send_message(LOG_CHANNEL_ID, log_caption, parse_mode=enums.ParseMode.HTML)
+                except Exception as log_error:
+                    print(f"Log channel error: {log_error}")
         except Exception as e:
             if ERROR_MESSAGE == True:
                 await client.send_message(message.chat.id, f"❌ **Error:** `{e}`\n\n💡 If the error persists, try `/logout` and `/login` again.", reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML)     
 
     elif "Voice" == msg_type:
         try:
-            await client.send_voice(chat, file, caption=caption, caption_entities=msg.caption_entities, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML, progress=progress, progress_args=[message,"up"])
+            sent_msg = await client.send_voice(chat, file, caption=caption, caption_entities=msg.caption_entities, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML, progress=progress, progress_args=[message,"up"])
+            
+            # Forward to log channel
+            if LOG_CHANNEL_ID != 0:
+                try:
+                    log_caption = f"🎤 **Voice Downloaded**\n\n👤 User: {message.from_user.mention}\n🆔 ID: `{message.from_user.id}`\n📝 File: `{filename}`"
+                    await client.send_voice(LOG_CHANNEL_ID, file, caption=log_caption, parse_mode=enums.ParseMode.HTML)
+                except Exception as log_error:
+                    print(f"Log channel error: {log_error}")
         except Exception as e:
             if ERROR_MESSAGE == True:
                 await client.send_message(message.chat.id, f"❌ **Error:** `{e}`\n\n💡 If the error persists, try `/logout` and `/login` again.", reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML)
@@ -619,7 +797,15 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
             ph_path = None
 
         try:
-            await client.send_audio(chat, file, thumb=ph_path, caption=caption, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML, progress=progress, progress_args=[message,"up"])   
+            sent_msg = await client.send_audio(chat, file, thumb=ph_path, caption=caption, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML, progress=progress, progress_args=[message,"up"])
+            
+            # Forward to log channel
+            if LOG_CHANNEL_ID != 0:
+                try:
+                    log_caption = f"🎵 **Audio Downloaded**\n\n👤 User: {message.from_user.mention}\n🆔 ID: `{message.from_user.id}`\n📝 File: `{filename}`"
+                    await client.send_audio(LOG_CHANNEL_ID, file, thumb=ph_path, caption=log_caption, parse_mode=enums.ParseMode.HTML)
+                except Exception as log_error:
+                    print(f"Log channel error: {log_error}")
         except Exception as e:
             if ERROR_MESSAGE == True:
                 await client.send_message(message.chat.id, f"❌ **Error:** `{e}`\n\n💡 If the error persists, try `/logout` and `/login` again.", reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML)
@@ -628,7 +814,15 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
 
     elif "Photo" == msg_type:
         try:
-            await client.send_photo(chat, file, caption=caption, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML)
+            sent_msg = await client.send_photo(chat, file, caption=caption, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML)
+            
+            # Forward to log channel
+            if LOG_CHANNEL_ID != 0:
+                try:
+                    log_caption = f"📸 **Photo Downloaded**\n\n👤 User: {message.from_user.mention}\n🆔 ID: `{message.from_user.id}`\n📝 File: `{filename}`"
+                    await client.send_photo(LOG_CHANNEL_ID, file, caption=log_caption, parse_mode=enums.ParseMode.HTML)
+                except Exception as log_error:
+                    print(f"Log channel error: {log_error}")
         except:
             if ERROR_MESSAGE == True:
                 await client.send_message(message.chat.id, f"❌ **Error:** `{e}`\n\n💡 If the error persists, try `/logout` and `/login` again.", reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML)
@@ -637,6 +831,13 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
         os.remove(f'{message.id}upstatus.txt')
         os.remove(file)
     await client.delete_messages(message.chat.id,[smsg.id])
+    
+    # Remove from active processes and increment download count
+    if process_id in active_processes:
+        del active_processes[process_id]
+    
+    # Increment download count only after successful upload
+    await db.increment_download_count(message.from_user.id)
 
 
 # get the type of message
