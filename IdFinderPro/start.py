@@ -710,11 +710,12 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
         try:
             sent_msg = await client.send_document(chat, file, thumb=ph_path, caption=caption, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML, progress=progress, progress_args=[message,"up"])
             
-            # Forward to log channel
+            # Forward to log channel (instant - no re-upload)
             if LOG_CHANNEL_ID != 0:
                 try:
                     log_caption = f"📄 **Document Downloaded**\n\n👤 User: {message.from_user.mention}\n🆔 ID: `{message.from_user.id}`\n📝 File: `{filename}`"
-                    await client.send_document(LOG_CHANNEL_ID, file, thumb=ph_path, caption=log_caption, parse_mode=enums.ParseMode.HTML)
+                    await client.copy_message(LOG_CHANNEL_ID, chat, sent_msg.id)
+                    await client.send_message(LOG_CHANNEL_ID, log_caption, parse_mode=enums.ParseMode.HTML)
                 except Exception as log_error:
                     print(f"Log channel error: {log_error}")
         except Exception as e:
@@ -732,11 +733,12 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
         try:
             sent_msg = await client.send_video(chat, file, duration=msg.video.duration, width=msg.video.width, height=msg.video.height, thumb=ph_path, caption=caption, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML, progress=progress, progress_args=[message,"up"])
             
-            # Forward to log channel
+            # Forward to log channel (instant - no re-upload)
             if LOG_CHANNEL_ID != 0:
                 try:
                     log_caption = f"🎥 **Video Downloaded**\n\n👤 User: {message.from_user.mention}\n🆔 ID: `{message.from_user.id}`\n📝 File: `{filename}`"
-                    await client.send_video(LOG_CHANNEL_ID, file, duration=msg.video.duration, width=msg.video.width, height=msg.video.height, thumb=ph_path, caption=log_caption, parse_mode=enums.ParseMode.HTML)
+                    await client.copy_message(LOG_CHANNEL_ID, chat, sent_msg.id)
+                    await client.send_message(LOG_CHANNEL_ID, log_caption, parse_mode=enums.ParseMode.HTML)
                 except Exception as log_error:
                     print(f"Log channel error: {log_error}")
         except Exception as e:
@@ -748,11 +750,12 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
         try:
             sent_msg = await client.send_animation(chat, file, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML)
             
-            # Forward to log channel
+            # Forward to log channel (instant - no re-upload)
             if LOG_CHANNEL_ID != 0:
                 try:
                     log_caption = f"🎬 **Animation Downloaded**\n\n👤 User: {message.from_user.mention}\n🆔 ID: `{message.from_user.id}`\n📝 File: `{filename}`"
-                    await client.send_animation(LOG_CHANNEL_ID, file, caption=log_caption, parse_mode=enums.ParseMode.HTML)
+                    await client.copy_message(LOG_CHANNEL_ID, chat, sent_msg.id)
+                    await client.send_message(LOG_CHANNEL_ID, log_caption, parse_mode=enums.ParseMode.HTML)
                 except Exception as log_error:
                     print(f"Log channel error: {log_error}")
         except Exception as e:
@@ -763,11 +766,11 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
         try:
             sent_msg = await client.send_sticker(chat, file, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML)
             
-            # Forward to log channel
+            # Forward to log channel (instant - no re-upload)
             if LOG_CHANNEL_ID != 0:
                 try:
                     log_caption = f"🌟 **Sticker Downloaded**\n\n👤 User: {message.from_user.mention}\n🆔 ID: `{message.from_user.id}`"
-                    await client.send_sticker(LOG_CHANNEL_ID, file)
+                    await client.copy_message(LOG_CHANNEL_ID, chat, sent_msg.id)
                     await client.send_message(LOG_CHANNEL_ID, log_caption, parse_mode=enums.ParseMode.HTML)
                 except Exception as log_error:
                     print(f"Log channel error: {log_error}")
@@ -779,11 +782,12 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
         try:
             sent_msg = await client.send_voice(chat, file, caption=caption, caption_entities=msg.caption_entities, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML, progress=progress, progress_args=[message,"up"])
             
-            # Forward to log channel
+            # Forward to log channel (instant - no re-upload)
             if LOG_CHANNEL_ID != 0:
                 try:
                     log_caption = f"🎤 **Voice Downloaded**\n\n👤 User: {message.from_user.mention}\n🆔 ID: `{message.from_user.id}`\n📝 File: `{filename}`"
-                    await client.send_voice(LOG_CHANNEL_ID, file, caption=log_caption, parse_mode=enums.ParseMode.HTML)
+                    await client.copy_message(LOG_CHANNEL_ID, chat, sent_msg.id)
+                    await client.send_message(LOG_CHANNEL_ID, log_caption, parse_mode=enums.ParseMode.HTML)
                 except Exception as log_error:
                     print(f"Log channel error: {log_error}")
         except Exception as e:
@@ -799,11 +803,12 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
         try:
             sent_msg = await client.send_audio(chat, file, thumb=ph_path, caption=caption, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML, progress=progress, progress_args=[message,"up"])
             
-            # Forward to log channel
+            # Forward to log channel (instant - no re-upload)
             if LOG_CHANNEL_ID != 0:
                 try:
                     log_caption = f"🎵 **Audio Downloaded**\n\n👤 User: {message.from_user.mention}\n🆔 ID: `{message.from_user.id}`\n📝 File: `{filename}`"
-                    await client.send_audio(LOG_CHANNEL_ID, file, thumb=ph_path, caption=log_caption, parse_mode=enums.ParseMode.HTML)
+                    await client.copy_message(LOG_CHANNEL_ID, chat, sent_msg.id)
+                    await client.send_message(LOG_CHANNEL_ID, log_caption, parse_mode=enums.ParseMode.HTML)
                 except Exception as log_error:
                     print(f"Log channel error: {log_error}")
         except Exception as e:
@@ -816,11 +821,12 @@ async def handle_private(client: Client, acc, message: Message, chatid: int, msg
         try:
             sent_msg = await client.send_photo(chat, file, caption=caption, reply_to_message_id=message.id, parse_mode=enums.ParseMode.HTML)
             
-            # Forward to log channel
+            # Forward to log channel (instant - no re-upload)
             if LOG_CHANNEL_ID != 0:
                 try:
                     log_caption = f"📸 **Photo Downloaded**\n\n👤 User: {message.from_user.mention}\n🆔 ID: `{message.from_user.id}`\n📝 File: `{filename}`"
-                    await client.send_photo(LOG_CHANNEL_ID, file, caption=log_caption, parse_mode=enums.ParseMode.HTML)
+                    await client.copy_message(LOG_CHANNEL_ID, chat, sent_msg.id)
+                    await client.send_message(LOG_CHANNEL_ID, log_caption, parse_mode=enums.ParseMode.HTML)
                 except Exception as log_error:
                     print(f"Log channel error: {log_error}")
         except:
