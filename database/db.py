@@ -160,5 +160,70 @@ class Database:
         if user.get('last_download_date') == today:
             return user.get('downloads_today', 0)
         return 0
+    
+    # Premium extension method
+    async def extend_premium(self, user_id, days):
+        """Extend premium membership by adding days to current expiry"""
+        import time
+        user = await self.col.find_one({'id': int(user_id)})
+        if not user:
+            return None
+        
+        duration = days * 24 * 60 * 60  # Convert days to seconds
+        current_expiry = user.get('premium_expiry')
+        
+        # If user has active premium, extend from current expiry
+        # Otherwise, start from now
+        if current_expiry and current_expiry > time.time():
+            new_expiry = current_expiry + duration
+        else:
+            new_expiry = time.time() + duration
+        
+        await self.col.update_one(
+            {'id': int(user_id)},
+            {'$set': {'is_premium': True, 'premium_expiry': new_expiry}}
+        )
+        return new_expiry
+    
+    # Banned users methods
+    async def ban_user(self, user_id, reason, banned_by):
+        """Ban a user from using the bot"""
+        import time
+        banned_col = self.db.banned_users
+        
+        # Check if already banned
+        existing = await banned_col.find_one({'user_id': int(user_id)})
+        if existing:
+            return False  # Already banned
+        
+        await banned_col.insert_one({
+            'user_id': int(user_id),
+            'reason': reason,
+            'banned_by': int(banned_by),
+            'banned_at': time.time()
+        })
+        return True
+    
+    async def unban_user(self, user_id):
+        """Unban a user"""
+        banned_col = self.db.banned_users
+        result = await banned_col.delete_one({'user_id': int(user_id)})
+        return result.deleted_count > 0
+    
+    async def is_banned(self, user_id):
+        """Check if user is banned"""
+        banned_col = self.db.banned_users
+        banned = await banned_col.find_one({'user_id': int(user_id)})
+        return banned
+    
+    async def get_all_banned_users(self):
+        """Get all banned users"""
+        banned_col = self.db.banned_users
+        banned_users = []
+        cursor = banned_col.find({})
+        async for user in cursor:
+            banned_users.append(user)
+        return banned_users
 
 db = Database(DB_URI, DB_NAME)
+

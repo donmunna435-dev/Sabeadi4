@@ -180,12 +180,14 @@ async def admin_panel(client: Client, message: Message):
     from config import ADMINS
     total_users = await db.total_users_count()
     premium_users = await db.get_all_premium_users()
+    banned_users = await db.get_all_banned_users()
     
     admin_text = f"""**🔧 ADMIN PANEL**
 
 📊 **Statistics:**
 • Total Users: {total_users}
 • Premium Users: {len(premium_users)}
+• Banned Users: {len(banned_users)}
 • Active Processes: {len(active_processes)}
 
 **Commands:**
@@ -194,6 +196,9 @@ async def admin_panel(client: Client, message: Message):
 /broadcast - Broadcast message
 /processes - View active downloads
 /exportdata - Export user database
+/ban - Ban a user
+/unban - Unban a user
+/banlist - View banned users
 
 **Quick Actions:**
 """
@@ -204,10 +209,128 @@ async def admin_panel(client: Client, message: Message):
         InlineKeyboardButton("⚙️ Processes", callback_data="admin_processes"),
         InlineKeyboardButton("📊 Export Data", callback_data="admin_export")
     ],[
-        InlineKeyboardButton("📊 Statistics", callback_data="admin_stats"),
+        InlineKeyboardButton("🚫 Ban List", callback_data="admin_banlist"),
         InlineKeyboardButton("🏠 Main Menu", callback_data="start")
     ]]
     await message.reply(admin_text, reply_markup=InlineKeyboardMarkup(buttons))
+
+# Ban user command
+@Client.on_message(filters.command(["ban"]) & filters.user(ADMINS))
+async def ban_user_cmd(client: Client, message: Message):
+    """Ban a user from using the bot"""
+    try:
+        parts = message.text.split(maxsplit=2)
+        if len(parts) < 2:
+            return await message.reply("**Usage:** `/ban <user_id> [reason]`\n\nExample: `/ban 123456789 Downloading adult content`")
+        
+        user_id = int(parts[1])
+        reason = parts[2] if len(parts) > 2 else "No reason provided"
+        
+        # Ban the user
+        success = await db.ban_user(user_id, reason, message.from_user.id)
+        
+        if not success:
+            return await message.reply(f"❌ **User `{user_id}` is already banned!**")
+        
+        # Try to notify the banned user
+        try:
+            await client.send_message(
+                user_id,
+                f"""🚫 **You have been banned from using this bot.**
+
+**Reason:** {reason}
+
+If you believe this is a mistake, please contact admin @tataa_sumo for unban.
+"""
+            )
+            notified = "✅ User notified"
+        except:
+            notified = "⚠️ Could not notify user (they may have blocked the bot)"
+        
+        await message.reply(f"""✅ **User Banned Successfully!**
+
+**User ID:** `{user_id}`
+**Reason:** {reason}
+**Status:** {notified}
+""")
+    
+    except ValueError:
+        await message.reply("❌ **Invalid user ID!** Please provide a valid numeric user ID.")
+    except Exception as e:
+        await message.reply(f"❌ **Error:** `{e}`")
+
+# Unban user command
+@Client.on_message(filters.command(["unban"]) & filters.user(ADMINS))
+async def unban_user_cmd(client: Client, message: Message):
+    """Unban a user"""
+    try:
+        parts = message.text.split()
+        if len(parts) < 2:
+            return await message.reply("**Usage:** `/unban <user_id>`\n\nExample: `/unban 123456789`")
+        
+        user_id = int(parts[1])
+        
+        # Unban the user
+        success = await db.unban_user(user_id)
+        
+        if not success:
+            return await message.reply(f"❌ **User `{user_id}` is not banned!**")
+        
+        # Try to notify the unbanned user
+        try:
+            await client.send_message(
+                user_id,
+                """✅ **You have been unbanned!**
+
+You can now use this bot again. Welcome back!
+
+Use /start to begin.
+"""
+            )
+            notified = "✅ User notified"
+        except:
+            notified = "⚠️ Could not notify user (they may have blocked the bot)"
+        
+        await message.reply(f"""✅ **User Unbanned Successfully!**
+
+**User ID:** `{user_id}`
+**Status:** {notified}
+""")
+    
+    except ValueError:
+        await message.reply("❌ **Invalid user ID!** Please provide a valid numeric user ID.")
+    except Exception as e:
+        await message.reply(f"❌ **Error:** `{e}`")
+
+# Banlist command
+@Client.on_message(filters.command(["banlist"]) & filters.user(ADMINS))
+async def banlist_cmd(client: Client, message: Message):
+    """View all banned users"""
+    from datetime import datetime
+    
+    banned_users = await db.get_all_banned_users()
+    
+    if not banned_users:
+        return await message.reply("📭 **No banned users found.**")
+    
+    banlist_text = f"**🚫 BANNED USERS ({len(banned_users)})**\n\n"
+    
+    for i, user in enumerate(banned_users[:20], 1):  # Show first 20
+        user_id = user.get('user_id')
+        reason = user.get('reason', 'No reason')
+        banned_at = user.get('banned_at')
+        
+        if banned_at:
+            date_str = datetime.fromtimestamp(banned_at).strftime('%Y-%m-%d')
+        else:
+            date_str = 'Unknown'
+        
+        banlist_text += f"**{i}.** `{user_id}`\n   📝 {reason}\n   📅 {date_str}\n\n"
+    
+    if len(banned_users) > 20:
+        banlist_text += f"\n_... and {len(banned_users) - 20} more_"
+    
+    await message.reply(banlist_text)
 
 
 # Callback query handler for inline buttons
@@ -525,6 +648,18 @@ async def save(client: Client, message: Message):
         return
     
     if "https://t.me/" in message.text:
+        # BAN CHECK - Block banned users
+        banned_info = await db.is_banned(message.from_user.id)
+        if banned_info:
+            return await message.reply(
+                f"""🚫 **You are banned from using this bot.**
+
+**Reason:** {banned_info.get('reason', 'No reason provided')}
+
+Contact @tataa_sumo if you want to get unbanned.
+"""
+            )
+        
         # FORCE SUBSCRIPTION CHECK
         is_subscribed = await check_force_sub(client, message.from_user.id)
         if not is_subscribed:

@@ -26,3 +26,6 @@ LOG_CHANNEL_ID = int(os.environ.get("LOG_CHANNEL_ID", ""))  # Set to 0 to disabl
 
 # If You Want Error Message In Your Personal Message Then Turn It True Else If You Don't Want Then Flase
 ERROR_MESSAGE = bool(os.environ.get('ERROR_MESSAGE', True))
+
+# Crypto Pay API Token (from @CryptoBot)
+CRYPTO_PAY_TOKEN = os.environ.get("CRYPTO_PAY_TOKEN", "")

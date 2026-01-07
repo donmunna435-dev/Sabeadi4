@@ -115,8 +115,12 @@ async def premium_menu(client: Client, message: Message):
 ✅ Priority support
 ✅ Faster processing
 
-Use `/redeem` to extend membership."""
-        buttons = [[InlineKeyboardButton("🏠 Main Menu", callback_data="start")]]
+Want more time? Extend your premium!"""
+        buttons = [[
+            InlineKeyboardButton("🔄 Extend Premium", callback_data="extend_premium")
+        ],[
+            InlineKeyboardButton("🏠 Main Menu", callback_data="start")
+        ]]
     else:
         text = f"""**💎 Premium Membership**
 
@@ -129,20 +133,13 @@ Use `/redeem` to extend membership."""
 ✅ Faster processing
 
 **💰 Pricing:**
-• **₹10** (≈ 0.12 USDT) - 1 Day
-• **₹40** (≈ 0.48 USDT) - 7 Days
-• **₹100** (≈ 1.20 USDT) - 30 Days
+• **₹10** / $0.15 - 1 Day
+• **₹40** / $0.50 - 7 Days
+• **₹100** / $1.20 - 30 Days
 
-**How to Purchase:**
-1. Contact @tataa_sumo
-2. Choose your plan
-3. Get payment details
-4. Receive redeem code
-5. Use `/redeem <code>`
-
-**Note:** Payment via UPI/Bank Transfer/Crypto"""
+Click below to upgrade!"""
         buttons = [[
-            InlineKeyboardButton("💬 Contact Admin", url="https://t.me/tataa_sumo")
+            InlineKeyboardButton("💎 Upgrade to Premium", callback_data="upgrade_premium")
         ],[
             InlineKeyboardButton("🏠 Main Menu", callback_data="start")
         ]]
@@ -164,32 +161,33 @@ async def redeem_code(client: Client, message: Message):
     code_info = redeem_codes[code]
     days = code_info['days']
     
-    # Calculate expiry
-    duration = days * 24 * 60 * 60  # Convert to seconds
-    expiry_time = time.time() + duration
-    
-    # Set premium
-    await db.set_premium(message.from_user.id, True, expiry_time)
+    # Extend premium (adds to existing if already premium)
+    new_expiry = await db.extend_premium(message.from_user.id, days)
     
     # Remove used code
     del redeem_codes[code]
     
     from datetime import datetime
-    expiry_date = datetime.fromtimestamp(expiry_time).strftime('%Y-%m-%d %H:%M:%S')
+    expiry_date = datetime.fromtimestamp(new_expiry).strftime('%Y-%m-%d %H:%M:%S')
+    
+    # Check if it was an extension
+    is_premium_user = await db.is_premium(message.from_user.id)
+    action = "Extended" if is_premium_user else "Activated"
     
     await message.reply(f"""
-✅ **Premium Activated!**
+✅ **Premium {action}!**
 
-**Duration:** {days} day(s)
-**Expires:** {expiry_date}
+**Duration Added:** {days} day(s)
+**New Expiry:** {expiry_date}
 
 **Benefits:**
 • Unlimited downloads per day
 • Priority support
 • Faster downloads
 
-Thank you for upgrading! 🎉
+Thank you! 🎉
 """)
+
 
 # View all premium members (Admin only)
 @Client.on_message(filters.private & filters.command(["premiumlist"]) & filters.user(ADMINS))
