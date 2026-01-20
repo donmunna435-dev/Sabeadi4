@@ -18,7 +18,7 @@ HELP_TXT = """**📖 HELP - Restricted Content Download Bot**
 First send invite link to join, then send post link.
 
 **💎 Rate Limits:**
-• Free: 10 downloads/day
+• Free: 100 downloads/day
 • Premium: 1000 downloads/day
 
 Use /premium to upgrade!
@@ -51,7 +51,7 @@ Example: `https://t.me/channel/1-50`
 PREMIUM_HELP = """**💎 Premium Membership**
 
 **Benefits:**
-✅ 1000 downloads per day (vs 10 free)
+✅ 1000 downloads per day (vs 100 free)
 ✅ Priority support
 ✅ Faster processing
 
