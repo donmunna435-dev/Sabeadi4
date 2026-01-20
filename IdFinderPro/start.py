@@ -111,7 +111,7 @@ async def send_start(client: Client, message: Message):
     
     login_emoji = "✅" if user_data else "❌"
     premium_emoji = "💎" if is_premium_user else "🆓"
-    limit = "Unlimited" if is_premium_user else 10
+    limit = "Unlimited" if is_premium_user else 100
     
     start_text = f"""👋 **Welcome {message.from_user.first_name}!**
 
@@ -374,7 +374,7 @@ async def callback_handler(client: Client, query):
         # Redirect to premium menu
         is_premium_user = await db.is_premium(query.from_user.id)
         downloads_today = await db.get_download_count(query.from_user.id)
-        limit = "Unlimited" if is_premium_user else 10
+        limit = "Unlimited" if is_premium_user else 100
         
         if is_premium_user:
             user = await db.col.find_one({'id': query.from_user.id})
@@ -402,10 +402,10 @@ Usage: {downloads_today} downloads today (Unlimited)
             text = f"""**💎 Premium Membership**
 
 **Current Plan:** Free
-**Usage:** {downloads_today}/10 today
+**Usage:** {downloads_today}/100 today
 
 **Premium Benefits:**
-✅ Unlimited downloads (vs 10/day)
+✅ Unlimited downloads (vs 100/day)
 ✅ Priority support
 ✅ Faster processing
 
@@ -689,15 +689,15 @@ Contact @tataa_sumo if you want to get unbanned.
         if not can_download:
             is_premium_user = await db.is_premium(message.from_user.id)
             current_downloads = await db.get_download_count(message.from_user.id)
-            remaining = 10 - current_downloads if not is_premium_user else 0
+            remaining = 100 - current_downloads if not is_premium_user else 0
             
             buttons = [[InlineKeyboardButton("💎 Upgrade to Premium", callback_data="premium_info")]]
             return await message.reply(
                 f"**❌ Not Enough Download Limit!**\n\n"
                 f"You requested {download_count} file(s) but only have {remaining} download(s) remaining today.\n\n"
-                f"**Your Usage:** {current_downloads}/10 today\n\n"
+                f"**Your Usage:** {current_downloads}/100 today\n\n"
                 f"**💎 Upgrade to Premium for Unlimited Downloads!**\n"
-                f"• Free: 10/day\n"
+                f"• Free: 100/day\n"
                 f"• Premium: Unlimited\n\n"
                 f"Use /premium to upgrade!",
                 reply_markup=InlineKeyboardMarkup(buttons)
