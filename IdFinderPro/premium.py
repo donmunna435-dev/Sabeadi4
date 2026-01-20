@@ -125,10 +125,10 @@ Want more time? Extend your premium!"""
         text = f"""**💎 Premium Membership**
 
 **Current Plan:** Free
-**Usage Today:** {downloads_today}/10
+**Usage Today:** {downloads_today}/100
 
 **Premium Benefits:**
-✅ Unlimited downloads (vs 10/day)
+✅ Unlimited downloads (vs 100/day)
 ✅ Priority support
 ✅ Faster processing
 
