@@ -119,7 +119,7 @@ class Database:
             downloads_today = 0
         
         # Check if user has enough limit left for 'count' downloads
-        limit = 10  # Free users: 10/day
+        limit = 100  # Free users: 100/day
         return (downloads_today + count) <= limit
     
     async def increment_download_count(self, user_id):
